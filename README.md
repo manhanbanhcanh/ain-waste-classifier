@@ -1,16 +1,16 @@
 # Visual Waste Sorting Assistant
 
-**By**: Duc Manh, Trang Quynh, Bao Chi (Group no. 9 - Topic no. 11)<br>
+**By**: Duc Manh, Trang Quynh, Bao Chi (Group no.9 - Topic no.11) <br>
 **Class**: 66FIT3AIN.TT02 <br>
 **Lecturer**: Nguyen Thanh Vinh _[(github)](https://github.com/vinhnt21)_
 
-## Project description
+## Project Description
 
 This project is for our lecture class about Artificial Intelligence.
 
 The project requirement are: build, train, and evaluate a CNN-based waste classifier capable of recognizing six types of recyclable/trash materials under realistic image conditions.
 
-For additional information (original repository's README.md), see [INFOMATION.md](INFOMATION.md)
+For additional information (original repository's README.md), see [INFOMATION.md](INFORMATION.md)
 
 ## Provided materials & resources
 
