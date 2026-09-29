@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import streamlit as st
+import tempfile
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -37,10 +38,16 @@ with st.sidebar:
 uploaded = st.file_uploader("Upload a waste photo", type=["png", "jpg", "jpeg"])
 
 if uploaded is not None:
-    st.image(uploaded, caption=uploaded.name, use_column_width=True)
+    st.image(uploaded, caption=uploaded.name, use_container_width=True)
     if st.button("Predict class"):
         try:
-            predict(model=None, image_path=uploaded)
+
+            # making a copy of uploaded image to get its path
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                tmp.write(uploaded.getbuffer())
+                path = Path(tmp.name)
+
+            predict(model=None, image_path=path)
         except NotImplementedError as exc:
             st.warning(f"Core not implemented yet: {exc}")
 else:
