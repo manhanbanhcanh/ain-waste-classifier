@@ -40,16 +40,18 @@ uploaded = st.file_uploader("Upload a waste photo", type=["png", "jpg", "jpeg"])
 if uploaded is not None:
     st.image(uploaded, caption=uploaded.name, use_container_width=True)
     if st.button("Predict class"):
+        
+        # making a copy of uploaded image to get its path
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+            tmp.write(uploaded.getbuffer())
+            path = Path(tmp.name)
+
         try:
-
-            # making a copy of uploaded image to get its path
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                tmp.write(uploaded.getbuffer())
-                path = Path(tmp.name)
-
             predict(model=None, image_path=path)
         except NotImplementedError as exc:
             st.warning(f"Core not implemented yet: {exc}")
+        finally:
+            path.unlink(missing_ok=True) # clean up after predict()
 else:
     st.info(
         "Upload an image to preview it here. Prediction is disabled until "
