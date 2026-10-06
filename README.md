@@ -4,7 +4,7 @@
 **Class**: 66FIT3AIN.TT02 <br>
 **Lecturer**: Nguyen Thanh Vinh _[(github)](https://github.com/vinhnt21)_
 
-## Project Description
+## Project description
 
 This project is for our lecture class about Artificial Intelligence.
 

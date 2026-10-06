@@ -1,11 +1,5 @@
-# Copied from ../python-baseline/requirements-common.txt, plus this
-# project's addition (tensorflow) per ../python-baseline/README.md.
-streamlit==1.39.0
-numpy==1.26.4
-pandas==2.2.3
-matplotlib==3.9.2
-pytest==8.3.3
-
-# Project 11 addition: neural networks (build/train/predict your own CNN).
-# Do not add a hosted LLM/vision API client here.
-tensorflow==2.17.0
+Pillow==12.3.0
+pytest==9.0.2
+streamlit==1.64.0
+torch==2.14.1
+torchvision==0.29.1
