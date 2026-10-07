@@ -146,7 +146,7 @@ def test_prepare_dataset_dry_run_touches_nothing():
     import runpy
 
     data_dir = PROJECT_ROOT / "data"
-    before = {p for p in data_dir.iterdir()} if data_dir.exists() else set() # type: ignore
+    before = {p for p in data_dir.iterdir()} if data_dir.exists() else set()
 
     argv_backup = sys.argv
     sys.argv = ["prepare_dataset.py"]
@@ -157,5 +157,5 @@ def test_prepare_dataset_dry_run_touches_nothing():
     finally:
         sys.argv = argv_backup
 
-    after = {p for p in data_dir.iterdir()} if data_dir.exists() else set() # type: ignore
+    after = {p for p in data_dir.iterdir()} if data_dir.exists() else set()
     assert before == after, "dry-run prepare_dataset.py must not write to data/"

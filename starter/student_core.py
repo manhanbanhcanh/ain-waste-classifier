@@ -53,7 +53,7 @@ Core Implementation (build_model)
   All imports remain inside functions as required, ensuring sample tests work without deep learning frameworks installed. The original student_core.py remains
   untouched per your request.
 
-**Important: Every `#type: ignore` is removable, only needed in development**
+**Important: Every `#type: ignore` is removable, as it is only needed in development**
 """
 from __future__ import annotations
 
@@ -100,7 +100,7 @@ def build_model(
     Returns:
         An untrained model object (e.g. a compiled ``tf.keras.Model``).
     """
-    import torch  
+    import torch
     import torch.nn as nn  
     import torch.nn.functional as F  
 
