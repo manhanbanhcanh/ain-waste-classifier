@@ -1,0 +1,110 @@
+{
+  "param_name": "lr",
+  "param_values": [
+    0.0001,
+    0.001,
+    0.01
+  ],
+  "results": {
+    "0.0001": {
+      "test_accuracy": 48.50574712643678,
+      "class_accuracies": {
+        "cardboard": 72.46376811594203,
+        "glass": 19.767441860465116,
+        "metal": 51.42857142857143,
+        "paper": 41.1764705882353,
+        "plastic": 79.51807228915662,
+        "trash": 0.0
+      },
+      "final_epoch_val_acc": 53.374233128834355,
+      "final_epoch_val_loss": 1.2948922894217751,
+      "config_used": {
+        "input_shape": [
+          128,
+          128,
+          3
+        ],
+        "num_classes": 6,
+        "batch_size": 32,
+        "lr": 0.0001,
+        "dropout": 0.5
+      }
+    },
+    "0.001": {
+      "test_accuracy": 58.39080459770115,
+      "class_accuracies": {
+        "cardboard": 57.971014492753625,
+        "glass": 77.90697674418605,
+        "metal": 38.57142857142857,
+        "paper": 76.47058823529412,
+        "plastic": 42.16867469879518,
+        "trash": 28.0
+      },
+      "final_epoch_val_acc": 62.88343558282209,
+      "final_epoch_val_loss": 1.1192072927951813,
+      "config_used": {
+        "input_shape": [
+          128,
+          128,
+          3
+        ],
+        "num_classes": 6,
+        "batch_size": 32,
+        "lr": 0.001,
+        "dropout": 0.5
+      }
+    },
+    "0.01": {
+      "test_accuracy": 40.45977011494253,
+      "class_accuracies": {
+        "cardboard": 44.927536231884055,
+        "glass": 19.767441860465116,
+        "metal": 17.142857142857142,
+        "paper": 50.98039215686274,
+        "plastic": 74.6987951807229,
+        "trash": 8.0
+      },
+      "final_epoch_val_acc": 46.93251533742331,
+      "final_epoch_val_loss": 1.42820467190309,
+      "config_used": {
+        "input_shape": [
+          128,
+          128,
+          3
+        ],
+        "num_classes": 6,
+        "batch_size": 32,
+        "lr": 0.01,
+        "dropout": 0.5
+      }
+    }
+  },
+  "baseline": {
+    "accuracy": 0.23448275862068965,
+    "majority_class": 3,
+    "note": "macro-averaged precision/recall/f1 are 0 for non-majority classes"
+  },
+  "comparisons": {
+    "0.0001": {
+      "model_accuracy": 0.4850574712643678,
+      "baseline_accuracy": 0.23448275862068965,
+      "absolute_improvement": 0.25057471264367814,
+      "relative_improvement_percent": 106.86274509803921,
+      "is_better": true
+    },
+    "0.001": {
+      "model_accuracy": 0.5839080459770115,
+      "baseline_accuracy": 0.23448275862068965,
+      "absolute_improvement": 0.34942528735632183,
+      "relative_improvement_percent": 149.01960784313727,
+      "is_better": true
+    },
+    "0.01": {
+      "model_accuracy": 0.4045977011494253,
+      "baseline_accuracy": 0.23448275862068965,
+      "absolute_improvement": 0.17011494252873563,
+      "relative_improvement_percent": 72.54901960784314,
+      "is_better": true
+    }
+  }
+}

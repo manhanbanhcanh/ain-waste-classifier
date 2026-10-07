@@ -1,0 +1,15 @@
+ablation study summary: lr
+==================================================
+baseline accuracy: 23.45%
+
+lr = 0.0001:
+  test accuracy: 48.51%
+  improvement: +25.06% (+106.86%)
+
+lr = 0.001:
+  test accuracy: 58.39%
+  improvement: +34.94% (+149.02%)
+
+lr = 0.01:
+  test accuracy: 40.46%
+  improvement: +17.01% (+72.55%)

@@ -1,0 +1,24 @@
+{
+  "test_accuracy": 57.93103448275862,
+  "class_accuracies": {
+    "cardboard": 65.21739130434783,
+    "glass": 40.69767441860465,
+    "metal": 54.285714285714285,
+    "paper": 78.43137254901961,
+    "plastic": 53.01204819277108,
+    "trash": 40.0
+  },
+  "final_epoch_val_acc": 62.576687116564415,
+  "final_epoch_val_loss": 1.0992729663848877,
+  "config": {
+    "input_shape": [
+      128,
+      128,
+      3
+    ],
+    "num_classes": 6,
+    "batch_size": 32,
+    "lr": 0.001,
+    "dropout": 0.5
+  }
+}
