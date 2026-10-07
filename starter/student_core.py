@@ -100,9 +100,9 @@ def build_model(
     Returns:
         An untrained model object (e.g. a compiled ``tf.keras.Model``).
     """
-    import torch  # type: ignore
-    import torch.nn as nn  # type: ignore
-    import torch.nn.functional as F  # type: ignore
+    import torch  
+    import torch.nn as nn  
+    import torch.nn.functional as F  
 
     class WasteNet(nn.Module):
         def __init__(
@@ -161,11 +161,11 @@ def train(
     example a Keras ``History``) so the required experiment can plot
     training/validation curves.
     """
-    import torch  # type: ignore
-    import torch.nn as nn  # type: ignore
-    import torch.optim as optim  # type: ignore
-    from torchvision import datasets, transforms  # type: ignore
-    from torch.utils.data import DataLoader  # type: ignore
+    import torch  
+    import torch.nn as nn  
+    import torch.optim as optim  
+    from torchvision import datasets, transforms  
+    from torch.utils.data import DataLoader  
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -180,8 +180,8 @@ def train(
     validation_dataset = datasets.ImageFolder(validation_dir, transform=transform)
 
     batch_size = kwargs.get('batch_size', 32)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)  # type: ignore
-    validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, num_workers=0)  # type: ignore
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)  
+    validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, num_workers=0)  
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=kwargs.get('lr', 0.001))
@@ -208,14 +208,14 @@ def train(
             outputs = model(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
-            optimizer.step()  # type: ignore
+            optimizer.step()  
 
             running_loss += loss.item()
             _, predicted = torch.max(outputs.data, 1)
             total_train += labels.size(0)
             correct_train += (predicted == labels).sum().item()
 
-        train_loss = running_loss / len(train_loader)  # type: ignore
+        train_loss = running_loss / len(train_loader)  
         train_acc = 100 * correct_train / total_train
 
         # validation phase
@@ -233,7 +233,7 @@ def train(
                 total_val += labels.size(0)
                 correct_val += (predicted == labels).sum().item()
 
-        validation_loss = running_loss / len(validation_loader)  # type: ignore
+        validation_loss = running_loss / len(validation_loader)  
         validation_acc = 100 * correct_val / total_val
 
         # store history
@@ -256,10 +256,10 @@ def predict(model: Any, image_path: Path) -> tuple[str, float]:
     float in ``[0, 1]``.
     """
 
-    import torch  # type: ignore
-    import torch.nn.functional as F  # type: ignore
-    from torchvision import transforms  # type: ignore
-    from PIL import Image  # type: ignore
+    import torch  
+    import torch.nn.functional as F  
+    from torchvision import transforms  
+    from PIL import Image  
 
     # device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -276,9 +276,9 @@ def predict(model: Any, image_path: Path) -> tuple[str, float]:
 
     # load and preprocess the image
     image = Image.open(image_path).convert('RGB')
-    transformed_image = transform(image)  # type: ignore
-    image_tensor = transformed_image.unsqueeze(0)  # type: ignore  # Add batch dimension
-    image_tensor = image_tensor.to(device)  # type: ignore
+    transformed_image = transform(image)  
+    image_tensor = transformed_image.unsqueeze(0)    # Add batch dimension
+    image_tensor = image_tensor.to(device)  
 
     # make prediction
     with torch.no_grad():
@@ -286,7 +286,7 @@ def predict(model: Any, image_path: Path) -> tuple[str, float]:
         probabilities = F.softmax(outputs, dim=1)
         confidence, predicted_idx = torch.max(probabilities, 1)
 
-    predicted_class: str = CLASSES[predicted_idx.item()]  # type: ignore
-    confidence_score: float = confidence.item()  # type: ignore
+    predicted_class: str = CLASSES[predicted_idx.item()]  
+    confidence_score: float = confidence.item()  
 
-    return (predicted_class, confidence_score)  # type: ignore
+    return (predicted_class, confidence_score)  

@@ -46,10 +46,9 @@ We must build and train their our CNN. Shipping downloaded pre-trained solution 
 ### Installation and Execution
 
 ```bash
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run starter/app.py
+git clone https://github.com/manhanbanhcanh/ain-waste-classifier
+pip install requirements.txt
+python scripts/prepare_dataset.py --confirm
 ```
 
 ---

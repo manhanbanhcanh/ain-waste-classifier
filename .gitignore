@@ -1,2 +1,4 @@
 .vscode/
-core_tester.py
+dev-test/
+data/
+starter/__pycache__
