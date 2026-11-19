@@ -26,11 +26,18 @@ project-11-waste-classifier/
 │   ├── prepare_dataset.py        # Automated download and train/val/test splitting utility for full TrashNet
 │   └── make_sample_images.py     # Offline synthetic image generation utility
 ├── starter/
-│   ├── student_core.py           # Algorithmic stubs: build_model, train, and predict
-│   └── app.py                    # Streamlit image upload and real-time classification dashboard
+│   ├── student_core.py           # Core functions: build_model, train, predict
+│   └── app.py                    # Streamlit dashboard with real-time classification
 ├── tests/
-│   └── test_project_11_sanity.py # Unit tests verifying dataset contracts and stub signatures
-└── requirements.txt              # Pinned Python package dependencies (including streamlit, pillow)
+│   ├── train/
+│   │   ├── train.py              # Training script with progress bars
+│   │   └── GUIDE.md              # Training guide
+│   └── test_project_11_sanity.py # Unit tests
+├── models/                       # Trained model weights (git-ignored)
+│   ├── best_model_lite.pt
+│   ├── best_model_standard.pt
+│   └── best_model_smart.pt
+└── requirements.txt              # Python dependencies
 ```
 
 ### Starter infrastructure and our implementation
@@ -41,14 +48,35 @@ project-11-waste-classifier/
    - **`train(model, train_dir, validation_dir, epochs)`** — runs the training loop with categorical cross-entropy loss and an adaptive optimizer (Adam or SGD with momentum).
    - **`predict(model, image_path)`** — returns the predicted class label and confidence probability for a single image.
 
-We must build and train their our CNN. Shipping downloaded pre-trained solution weights (`.h5`, `.pt`, `.ckpt`, `.pkl`) or calling hosted vision/LLM APIs is strictly prohibited.
+We must build and train our own CNN. Shipping downloaded pre-trained solution weights (`.h5`, `.pt`, `.ckpt`, `.pkl`) or calling hosted vision/LLM APIs is strictly prohibited.
 
 ### Installation and Execution
 
 ```bash
 git clone https://github.com/manhanbanhcanh/ain-waste-classifier
-pip install requirements.txt
+pip install -r requirements.txt
 python scripts/prepare_dataset.py --confirm
+```
+
+### Training Models
+
+```bash
+# Quick test (sample data)
+python tests/train/train.py --variant standard --epochs 5
+
+# Full training (recommended)
+python tests/train/train.py --variant standard --full --epochs 30 --progress
+
+# Maximum accuracy (Smart variant)
+python tests/train/train.py --variant smart --full --epochs 40 --progress
+```
+
+See `tests/train/GUIDE.md` for complete training guide.
+
+### Running the App
+
+```bash
+streamlit run starter/app.py
 ```
 
 ---

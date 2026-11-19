@@ -1,4 +1,11 @@
 .vscode/
 dev-test/
-data/
+data/train/
+data/validation/
+data/test/
 starter/__pycache__
+
+# development resources
+.agents
+.claude
+.venv
