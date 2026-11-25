@@ -1,11 +1,93 @@
-.vscode/
-dev-test/
-data/train/
-data/validation/
-data/test/
-starter/__pycache__
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# development resources
-.agents
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# Environment variables / secrets
+.env
+.env.local
+.env.*.local
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# Python packaging / build
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb.checkpoints
+
+# Model files (PyTorch, TensorFlow, ONNX, etc.)
+*.pt
+*.pth
+*.h5
+*.hdf5
+*.onnx
+*.pb
+*.tflite
+*.ckpt
+*.safetensors
+*.bin
+model/
+models/
+*.model
+starter/.model/
+
+# Data / datasets (keep sample/ but ignore large datasets)
+data/*.csv
+data/*.json
+data/*.parquet
+data/*.pkl
+data/*.pickle
+data/*.npy
+data/*.npz
+data/sample/*
+!data/sample/.gitkeep
+
+# Logs
+*.log
+logs/
+wandb/
+mlruns/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS / temporary files
+*.tmp
+*.temp
+.cache/
+
+# Misc
+*.pyc
+.pytest_cache/
 .claude
-.venv
+.resources
+.agents

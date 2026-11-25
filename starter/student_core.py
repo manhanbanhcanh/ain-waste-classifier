@@ -1,7 +1,4 @@
-"""
-# Project 11 AI core - visual waste sorting.
-
-1. Requirement:
+"""Project 11 AI core — visual waste sorting.
 
 Fill in ``build_model``, ``train``, and ``predict`` yourself. Do **not**:
 
@@ -18,59 +15,16 @@ Heavy imports (TensorFlow/Keras, PyTorch, etc.) belong *inside* these
 functions, not at module import time, so that ``data/sample/`` smoke tests
 and ``tests/test_project_11_sanity.py`` keep working even before you (or a
 grader) install a deep-learning framework.
-
-2. Implementation:
-
-Core Implementation (build_model)
-
-  - Three Model Variants (DRAMATICALLY DIFFERENT):
-    - Lite: 1 Conv block (16→32 filters), GlobalAvgPool, tiny FC - ~5K params - Ultra-fast edge
-    - Standard: 3 Conv blocks (16→32→64), 2 FC layers - ~4.3M params - Balanced
-    - Smart: 5-Stage Deep Residual (64→64→128→256→512), 10 SE Residual blocks, GlobalAvgPool - ~15M params - Best accuracy
-
-  - Key Features by Variant:
-    - Lite: Minimal, single conv block, no residuals, no attention
-    - Standard: Classic CNN, progressive filters, dropout regularization
-    - Smart: Deep residuals, Squeeze-Excitation attention, batch norm throughout, wider filters
-
-  - Compliance: No pretrained weights, all heavy imports inside functions
-
-Supporting Functions
-
-  - train(): Complete training loop with:
-    - CrossEntropyLoss and Adam optimizer
-    - Training/validation loss/accuracy tracking per epoch
-    - Device-agnostic execution (GPU/CPU fallback)
-    - PyTorch DataLoaders for batch processing
-  - predict(): Single-image inference returning (class_name, confidence):
-    - Matches training transforms (resize, tensor conversion, normalization)
-    - Softmax conversion to probabilities
-    - Returns required tuple format
-
-Usage & Experimentation
-
-The architecture is ready for the required experiments:
-  - Depth: Modify number of conv layers in WasteNet
-  - Filter counts: Adjust filter progression
-  - Dropout: Change nn.Dropout rate
-  - Learning rate: Pass lr kwarg to train()
-
-All imports remain inside functions as required, ensuring sample tests work without deep learning frameworks installed.
-
-**Important: Every `#type: ignore` is removable, as it is only needed in development**
 """
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 # TrashNet's six classes, in the order the dataset defines them. Do not
-# reorder or rename these - labels, the sample data, and the sanity tests
+# reorder or rename these — labels, the sample data, and the sanity tests
 # all depend on this exact tuple.
 CLASSES: tuple[str, ...] = ("cardboard", "glass", "metal", "paper", "plastic", "trash")
-
-# Model variants
-MODEL_VARIANTS: tuple[str, ...] = ("lite", "standard", "smart")
 
 CLASS_DESCRIPTIONS: dict[str, str] = {
     "cardboard": "Flattened boxes and packaging paperboard.",
@@ -93,224 +47,108 @@ def class_description(class_name: str) -> str:
 def build_model(
     input_shape: tuple[int, int, int] = (128, 128, 3),
     num_classes: int = len(CLASSES),
-    variant: Literal["lite", "standard", "smart"] = "standard",
+    *,
+    depth: int = 4,
+    base_filters: int = 32,
+    dropout: float = 0.5,
+    lightweight: bool = False,
 ) -> Any:
-    """Build and return a WasteNet model of the specified variant.
+    """Build and return an *untrained* CNN for ``num_classes`` waste categories.
+
+    Implement your own architecture (a stack of Conv2D/pooling layers
+    followed by dense layers is enough). Do not load a pretrained model or
+    third-party solution weights.
 
     Args:
         input_shape: (height, width, channels) of the images you resize to.
-        num_classes: Number of output classes (6 for TrashNet).
-        variant: Model variant - "lite", "standard", or "smart".
+        num_classes: number of output classes (6 for the TrashNet labels).
+        depth: Number of convolutional blocks (3, 4, or 5).
+        base_filters: Number of filters in the first conv layer (doubles each block).
+        dropout: Dropout probability for the classifier head.
+        lightweight: If True, uses Global Average Pooling and smaller FC layer
+                     for a much lighter model (~10x fewer params).
 
     Returns:
-        An untrained model object (torch.nn.Module).
+        An untrained model object (e.g. a compiled ``tf.keras.Model``).
     """
     import torch
     import torch.nn as nn
 
-    class SEBlock(nn.Module):
-        """Squeeze-and-Excitation block for channel attention (Smart variant)."""
-        def __init__(self, channels: int, reduction: int = 16) -> None:
-            super().__init__()
-            self.avg_pool = nn.AdaptiveAvgPool2d(1)
-            self.fc = nn.Sequential(
-                nn.Linear(channels, channels // reduction, bias=False),
-                nn.ReLU(inplace=True),
-                nn.Linear(channels // reduction, channels, bias=False),
-                nn.Sigmoid()
-            )
+    class WasteCNN(nn.Module):
+        """Custom CNN for TrashNet waste classification."""
 
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            b, c, _, _ = x.size()
-            y = self.avg_pool(x).view(b, c)
-            y = self.fc(y).view(b, c, 1, 1)
-            return x * y.expand_as(x)
-
-    class ResidualBlock(nn.Module):
-        """Residual block with optional SE attention (Smart variant)."""
-        def __init__(self, channels: int, use_se: bool = False) -> None:
-            super().__init__()
-            self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False)
-            self.bn1 = nn.BatchNorm2d(channels)
-            self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False)
-            self.bn2 = nn.BatchNorm2d(channels)
-            self.relu = nn.ReLU(inplace=True)
-            self.se = SEBlock(channels) if use_se else nn.Identity()
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            identity = x
-            out = self.relu(self.bn1(self.conv1(x)))
-            out = self.bn2(self.conv2(out))
-            out = self.se(out)
-            out += identity
-            return self.relu(out)
-
-    class ConvBlock(nn.Module):
-        """Convolutional block: Conv + BN + ReLU + Pool (Standard/Smart)."""
-        def __init__(self, in_channels: int, out_channels: int, use_pool: bool = True) -> None:
-            super().__init__()
-            self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False)
-            self.bn = nn.BatchNorm2d(out_channels)
-            self.relu = nn.ReLU(inplace=True)
-            self.pool = nn.MaxPool2d(2, 2) if use_pool else nn.Identity()
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            x = self.relu(self.bn(self.conv(x)))
-            x = self.pool(x)
-            return x
-
-    class WasteNet(nn.Module):
         def __init__(
             self,
             input_shape: tuple[int, int, int],
             num_classes: int,
-            variant: str = "standard",
-        ) -> None:
+            depth: int = 4,
+            base_filters: int = 32,
+            dropout: float = 0.5,
+            lightweight: bool = False,
+        ):
             super().__init__()
-            self.input_shape: tuple[int, int, int] = input_shape
-            self.num_classes: int = num_classes
-            self.variant: str = variant
+            self.input_shape = input_shape
+            self.num_classes = num_classes
+            self.depth = depth
+            self.base_filters = base_filters
+            self.dropout = dropout
+            self.lightweight = lightweight
 
-            h: int = input_shape[0]
-            w: int = input_shape[1]
-            c: int = input_shape[2]  # height, width, color channel (3 for RGB)
+            # Build convolutional feature extractor
+            layers = []
+            in_channels = input_shape[2]
+            current_filters = base_filters
 
-            if variant == "lite":
-                # ============================================================
-                # LITE: Ultra-lightweight - Single conv block, GlobalAvgPool
-                # ~0.1M params, ~5ms CPU inference
-                # ============================================================
-                self.features = nn.Sequential(
-                    nn.Conv2d(c, 16, kernel_size=3, padding=1, bias=False),
-                    nn.BatchNorm2d(16),
+            for i in range(depth):
+                layers.extend([
+                    nn.Conv2d(in_channels, current_filters, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(current_filters),
                     nn.ReLU(inplace=True),
-                    nn.MaxPool2d(2, 2),           # 64x64
-                    nn.Conv2d(16, 32, kernel_size=3, padding=1, bias=False),
-                    nn.BatchNorm2d(32),
-                    nn.ReLU(inplace=True),
-                    nn.MaxPool2d(2, 2),           # 32x32
-                )
-                # Global Average Pooling instead of large FC
-                self.gap = nn.AdaptiveAvgPool2d(1)
+                    nn.MaxPool2d(kernel_size=2, stride=2),
+                ])
+                in_channels = current_filters
+                current_filters *= 2
+
+            self.features = nn.Sequential(*layers)
+
+            if lightweight:
+                # Use Global Average Pooling + small FC layer
+                # Final feature map channels = base_filters * 2^(depth-1)
+                final_channels = base_filters * (2 ** (depth - 1))
+                self.pool = nn.AdaptiveAvgPool2d((1, 1))
                 self.classifier = nn.Sequential(
-                    nn.Dropout(0.3),
-                    nn.Linear(32, num_classes)
+                    nn.Dropout(p=dropout),
+                    nn.Linear(final_channels, 64),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(p=dropout),
+                    nn.Linear(64, num_classes),
                 )
+            else:
+                # Calculate flattened size dynamically
+                with torch.no_grad():
+                    dummy = torch.zeros(1, input_shape[2], input_shape[0], input_shape[1])
+                    dummy = self.features(dummy)
+                    flattened_size = dummy.view(1, -1).size(1)
 
-            elif variant == "standard":
-                # ============================================================
-                # STANDARD: Classic 3-block CNN with FC classifier
-                # ~2.1M params, ~50ms CPU inference
-                # ============================================================
-                self.features = nn.Sequential(
-                    # Block 1: 128 -> 64
-                    ConvBlock(c, 16, use_pool=True),
-                    # Block 2: 64 -> 32
-                    ConvBlock(16, 32, use_pool=True),
-                    # Block 3: 32 -> 16
-                    ConvBlock(32, 64, use_pool=True),
-                )
-                # Flatten + FC
-                fc_input_size = 64 * (h // 8) * (w // 8)  # 64 * 16 * 16 = 16384
                 self.classifier = nn.Sequential(
                     nn.Flatten(),
-                    nn.Linear(fc_input_size, 256),
+                    nn.Dropout(p=dropout),
+                    nn.Linear(flattened_size, 512),
                     nn.ReLU(inplace=True),
-                    nn.Dropout(0.5),
-                    nn.Linear(256, 128),
-                    nn.ReLU(inplace=True),
-                    nn.Dropout(0.5),
-                    nn.Linear(128, num_classes)
+                    nn.Dropout(p=dropout),
+                    nn.Linear(512, num_classes),
                 )
 
-            elif variant == "smart":
-                # ============================================================
-                # SMART: Deep residual CNN with SE attention - WIDE & DEEP
-                # ~8M params, ~150ms CPU inference
-                # ============================================================
-                # Stem: 128 -> 64
-                self.stem = nn.Sequential(
-                    nn.Conv2d(c, 64, kernel_size=3, padding=1, bias=False),
-                    nn.BatchNorm2d(64),
-                    nn.ReLU(inplace=True),
-                    nn.MaxPool2d(2, 2),
-                )
-
-                # Stage 1: 64x64, 64 channels
-                self.stage1 = nn.Sequential(
-                    ConvBlock(64, 64, use_pool=False),
-                    ResidualBlock(64, use_se=True),
-                    ResidualBlock(64, use_se=True),
-                    ResidualBlock(64, use_se=True),
-                )
-                self.pool1 = nn.MaxPool2d(2, 2)  # 32x32
-
-                # Stage 2: 32x32, 128 channels
-                self.stage2 = nn.Sequential(
-                    ConvBlock(64, 128, use_pool=False),
-                    ResidualBlock(128, use_se=True),
-                    ResidualBlock(128, use_se=True),
-                    ResidualBlock(128, use_se=True),
-                )
-                self.pool2 = nn.MaxPool2d(2, 2)  # 16x16
-
-                # Stage 3: 16x16, 256 channels
-                self.stage3 = nn.Sequential(
-                    ConvBlock(128, 256, use_pool=False),
-                    ResidualBlock(256, use_se=True),
-                    ResidualBlock(256, use_se=True),
-                )
-                self.pool3 = nn.MaxPool2d(2, 2)  # 8x8
-
-                # Stage 4: 8x8, 512 channels
-                self.stage4 = nn.Sequential(
-                    ConvBlock(256, 512, use_pool=False),
-                    ResidualBlock(512, use_se=True),
-                    ResidualBlock(512, use_se=True),
-                )
-                self.pool4 = nn.MaxPool2d(2, 2)  # 4x4
-
-                # Global Average Pooling + Classifier
-                self.gap = nn.AdaptiveAvgPool2d(1)
-                self.classifier = nn.Sequential(
-                    nn.Dropout(0.4),
-                    nn.Linear(512, 1024),
-                    nn.ReLU(inplace=True),
-                    nn.Dropout(0.4),
-                    nn.Linear(1024, num_classes)
-                )
-
-            else:
-                raise ValueError(f"Unknown variant: {variant}. Choose from: {MODEL_VARIANTS}")
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            if self.variant == "lite":
-                x = self.features(x)      # 32x32x32
-                x = self.gap(x)           # 32x1x1
-                x = x.view(x.size(0), -1) # flatten to (B, 32)
-                x = self.classifier(x)
-
-            elif self.variant == "standard":
-                x = self.features(x)      # 16x16x64
-                x = self.classifier(x)
-
-            elif self.variant == "smart":
-                x = self.stem(x)          # 64x64x64
-                x = self.stage1(x)        # 64x64x64
-                x = self.pool1(x)         # 32x32x64
-                x = self.stage2(x)        # 32x32x128
-                x = self.pool2(x)         # 16x16x128
-                x = self.stage3(x)        # 16x16x256
-                x = self.pool3(x)         # 8x8x256
-                x = self.stage4(x)        # 8x8x512
-                x = self.pool4(x)         # 4x4x512
-                x = self.gap(x)           # 512x1x1
-                x = x.view(x.size(0), -1) # flatten to (B, 512)
-                x = self.classifier(x)
-
+        def forward(self, x):
+            x = self.features(x)
+            if self.lightweight:
+                x = self.pool(x)
+                x = x.view(x.size(0), -1)
+            x = self.classifier(x)
             return x
 
-    return WasteNet(input_shape, num_classes, variant)
+    model = WasteCNN(input_shape, num_classes, depth, base_filters, dropout, lightweight)
+    return model
 
 
 def train(
@@ -319,262 +157,229 @@ def train(
     validation_dir: Path,
     *,
     epochs: int = 10,
-    progress: bool = False,
+    lr: float = 0.001,
+    augmentation: str = "basic",
     **kwargs: Any,
 ) -> Any:
+    """Train ``model`` on images under ``train_dir``, validating on ``validation_dir``.
+
+    Both directories are expected to contain one sub-folder per class (see
+    ``data/README.md``): either ``data/sample/`` for a tiny smoke test, or
+    ``data/train/`` and ``data/validation/`` after running
+    ``scripts/prepare_dataset.py --confirm``.
+
+    Return whatever training-history object your framework produces (for
+    example a Keras ``History``) so the required experiment can plot
+    training/validation curves.
+
+    Args:
+        model: The model to train.
+        train_dir: Path to training data directory.
+        validation_dir: Path to validation data directory.
+        epochs: Number of training epochs.
+        lr: Learning rate for the optimizer.
+        augmentation: Data augmentation strategy ("none", "basic", "strong").
+    """
     import torch
     import torch.nn as nn
     import torch.optim as optim
-    from torchvision import datasets, transforms
-    from torch.utils.data import DataLoader, WeightedRandomSampler
-    from collections import Counter
+    from torch.utils.data import DataLoader, Dataset
+    from torchvision import transforms
+    from PIL import Image
 
-    # Optional tqdm import for progress bar
-    try:
-        from tqdm import tqdm  # type: ignore[import-not-found]
-        HAS_TQDM: bool = True
-    except ImportError:
-        tqdm = None  # type: ignore[assignment]
-        HAS_TQDM = False
-        if progress:
-            print("Note: tqdm not installed, progress bar disabled. Install with: pip install tqdm")
-
+    # Check if we have CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+    model = model.to(device)
 
-    # Enhanced data augmentation for training
-    train_transform = transforms.Compose([
-        transforms.Resize((model.input_shape[0], model.input_shape[1])),
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation(degrees=15),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-        transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])  # normalize to [-1,1]
-    ])
+    # Data transforms based on augmentation strategy
+    if augmentation == "none":
+        train_transform = transforms.Compose([
+            transforms.Resize((128, 128)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    elif augmentation == "basic":
+        train_transform = transforms.Compose([
+            transforms.Resize((128, 128)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomRotation(degrees=15),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    elif augmentation == "strong":
+        train_transform = transforms.Compose([
+            transforms.Resize((128, 128)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.1),
+            transforms.RandomRotation(degrees=30),
+            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
+            transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    else:
+        raise ValueError(f"Unknown augmentation strategy: {augmentation}")
 
-    # Validation transform (no augmentation)
+    # For validation: no augmentation
     val_transform = transforms.Compose([
-        transforms.Resize((model.input_shape[0], model.input_shape[1])),
+        transforms.Resize((128, 128)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    train_dataset = datasets.ImageFolder(train_dir, transform=train_transform)
-    validation_dataset = datasets.ImageFolder(validation_dir, transform=val_transform)
+    class WasteDataset(Dataset):
+        def __init__(self, root_dir: Path, transform=None):
+            self.root_dir = root_dir
+            self.transform = transform
+            self.samples = []
+            self.class_to_idx = {cls: i for i, cls in enumerate(CLASSES)}
 
-    # Handle class imbalance with WeightedRandomSampler
-    targets = [label for _, label in train_dataset.samples]
-    class_counts = Counter(targets)
-    num_classes = len(class_counts)
-    class_weights = {cls: 1.0 / count for cls, count in class_counts.items()}
-    sample_weights = [class_weights[label] for label in targets]
+            for class_name in CLASSES:
+                class_dir = root_dir / class_name
+                if class_dir.exists():
+                    for img_path in class_dir.glob("*.png"):
+                        self.samples.append((img_path, self.class_to_idx[class_name]))
+                    for img_path in class_dir.glob("*.jpg"):
+                        self.samples.append((img_path, self.class_to_idx[class_name]))
+                    for img_path in class_dir.glob("*.jpeg"):
+                        self.samples.append((img_path, self.class_to_idx[class_name]))
 
-    sampler = WeightedRandomSampler(
-        weights=sample_weights,
-        num_samples=len(sample_weights),
-        replacement=True
-    )
+        def __len__(self):
+            return len(self.samples)
 
-    batch_size = kwargs.get('batch_size', 32)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, num_workers=0)
-    validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+        def __getitem__(self, idx):
+            img_path, label = self.samples[idx]
+            image = Image.open(img_path).convert("RGB")
+            if self.transform:
+                image = self.transform(image)
+            return image, label
 
-    # Class weights for loss function (inverse frequency)
-    weight_tensor = torch.tensor([class_weights[i] for i in range(num_classes)], dtype=torch.float32).to(device)
-    criterion = nn.CrossEntropyLoss(weight=weight_tensor)
+    train_dataset = WasteDataset(train_dir, transform=train_transform)
+    val_dataset = WasteDataset(validation_dir, transform=val_transform)
 
-    # Optimizer with weight decay
-    optimizer = optim.AdamW(model.parameters(), lr=kwargs.get('lr', 0.001), weight_decay=1e-4)
+    # Handle case where sample data might be very small
+    batch_size = min(32, len(train_dataset)) if len(train_dataset) > 0 else 1
 
-    # Learning rate scheduler - Cosine Annealing with Warm Restarts
-    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
-    # training history
-    history: dict[str, list[float]] = {
+    # Loss and optimizer
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=3, factor=0.5)
+
+    # Training history
+    history = {
         'train_loss': [],
         'train_acc': [],
         'val_loss': [],
         'val_acc': [],
-        'lr': []
     }
 
-    # Early stopping
-    best_val_loss = float('inf')
-    patience = kwargs.get('patience', 10)
-    patience_counter = 0
-    best_model_state = None
-
-    # training loop
-    epoch_iterator = range(epochs)
-    if progress and HAS_TQDM:
-        epoch_iterator = tqdm(epoch_iterator, desc="Epochs", unit="epoch")  # type: ignore[operator]
-
-    for epoch in epoch_iterator:
+    for epoch in range(epochs):
+        # Training phase
         model.train()
-        running_loss = 0.0
-        correct_train = 0
-        total_train = 0
+        train_loss = 0.0
+        train_correct = 0
+        train_total = 0
 
-        # Training batch loop with optional progress bar
-        train_loader_iter = train_loader
-        if progress and HAS_TQDM:
-            train_loader_iter = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs} [Train]", leave=False, unit="batch")  # type: ignore[operator]
-
-        for inputs, labels in train_loader_iter:
-            inputs, labels = inputs.to(device), labels.to(device)
+        for images, labels in train_loader:
+            images, labels = images.to(device), labels.to(device)
 
             optimizer.zero_grad()
-            outputs = model(inputs)
+            outputs = model(images)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
 
-            running_loss += loss.item()
-            _, predicted = torch.max(outputs.data, 1)
-            total_train += labels.size(0)
-            correct_train += (predicted == labels).sum().item()
+            train_loss += loss.item() * images.size(0)
+            _, predicted = torch.max(outputs, 1)
+            train_total += labels.size(0)
+            train_correct += (predicted == labels).sum().item()
 
-        train_loss = running_loss / len(train_loader)
-        train_acc = 100 * correct_train / total_train
+        avg_train_loss = train_loss / train_total if train_total > 0 else 0
+        train_accuracy = train_correct / train_total if train_total > 0 else 0
 
-        # validation phase
+        # Validation phase
         model.eval()
-        running_loss = 0.0
-        correct_val = 0
-        total_val = 0
-
-        # Validation batch loop with optional progress bar
-        val_loader_iter = validation_loader
-        if progress and HAS_TQDM:
-            val_loader_iter = tqdm(validation_loader, desc=f"Epoch {epoch+1}/{epochs} [Val]", leave=False, unit="batch")  # type: ignore[operator]
+        val_loss = 0.0
+        val_correct = 0
+        val_total = 0
 
         with torch.no_grad():
-            for inputs, labels in val_loader_iter:
-                inputs, labels = inputs.to(device), labels.to(device)
-                outputs = model(inputs)
+            for images, labels in val_loader:
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
                 loss = criterion(outputs, labels)
-                running_loss += loss.item()
-                _, predicted = torch.max(outputs.data, 1)
-                total_val += labels.size(0)
-                correct_val += (predicted == labels).sum().item()
 
-        validation_loss = running_loss / len(validation_loader)
-        validation_acc = 100 * correct_val / total_val
+                val_loss += loss.item() * images.size(0)
+                _, predicted = torch.max(outputs, 1)
+                val_total += labels.size(0)
+                val_correct += (predicted == labels).sum().item()
 
-        # Step scheduler
-        scheduler.step()
-        current_lr = optimizer.param_groups[0]['lr']
+        avg_val_loss = val_loss / val_total if val_total > 0 else 0
+        val_accuracy = val_correct / val_total if val_total > 0 else 0
 
-        # store history
-        history['train_loss'].append(train_loss)
-        history['train_acc'].append(train_acc)
-        history['val_loss'].append(validation_loss)
-        history['val_acc'].append(validation_acc)
-        history['lr'].append(current_lr)
+        # Update learning rate scheduler
+        scheduler.step(avg_val_loss)
 
-        # Print epoch summary (tqdm handles the progress bar, so we print summary after)
-        if not (progress and HAS_TQDM):
-            print(f'Epoch {epoch+1}/{epochs}: '
-                  f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, '
-                  f'Val Loss: {validation_loss:.4f}, Val Acc: {validation_acc:.2f}%, '
-                  f'LR: {current_lr:.6f}')
-        else:
-            # With tqdm, print a clean summary line
-            tqdm.write(f'Epoch {epoch+1}/{epochs}: '  # type: ignore[union-attr]
-                  f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, '
-                  f'Val Loss: {validation_loss:.4f}, Val Acc: {validation_acc:.2f}%, '
-                  f'LR: {current_lr:.6f}')
+        # Record history
+        history['train_loss'].append(avg_train_loss)
+        history['train_acc'].append(train_accuracy)
+        history['val_loss'].append(avg_val_loss)
+        history['val_acc'].append(val_accuracy)
 
-        # Early stopping check
-        if validation_loss < best_val_loss:
-            best_val_loss = validation_loss
-            patience_counter = 0
-            best_model_state = model.state_dict().copy()
-        else:
-            patience_counter += 1
-            if patience_counter >= patience:
-                print(f'Early stopping triggered after {epoch+1} epochs (best val loss: {best_val_loss:.4f})')
-                break
+        print(f"Epoch {epoch+1}/{epochs}: "
+              f"Train Loss: {avg_train_loss:.4f}, Train Acc: {train_accuracy:.4f}, "
+              f"Val Loss: {avg_val_loss:.4f}, Val Acc: {val_accuracy:.4f}")
 
-    # Load best model state
-    if best_model_state is not None:
-        model.load_state_dict(best_model_state)
+    # Create a simple history object that mimics Keras History
+    class History:
+        def __init__(self, history_dict):
+            self.history = history_dict
 
-    return history
+    return History(history)
 
 
 def predict(model: Any, image_path: Path) -> tuple[str, float]:
+    """Return ``(predicted_class, confidence)`` for the image at ``image_path``.
 
+    ``predicted_class`` must be one of ``CLASSES``. ``confidence`` is a
+    float in ``[0, 1]``.
+    """
     import torch
     import torch.nn.functional as F
     from torchvision import transforms
     from PIL import Image
 
-    # device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+    model = model.to(device)
     model.eval()
 
-    # define transform
-    # !important: must match the one used in training
+    # Transform for inference (same as validation)
     transform = transforms.Compose([
-        transforms.Resize((model.input_shape[0], model.input_shape[1])),
+        transforms.Resize((128, 128)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    # load and preprocess the image
-    image = Image.open(image_path).convert('RGB')
-    transformed_image = transform(image)
-    # ToTensor() returns a torch.Tensor - cast for type checker
-    image_tensor = torch.as_tensor(transformed_image).unsqueeze(0)    # Add batch dimension
-    image_tensor = image_tensor.to(device)
+    # Handle both file path and uploaded file (BytesIO)
+    if hasattr(image_path, 'read'):
+        # It's a file-like object (Streamlit uploaded file)
+        image = Image.open(image_path).convert("RGB")
+    else:
+        # It's a Path or string
+        image = Image.open(image_path).convert("RGB")
 
-    # make prediction
+    image_tensor = transform(image).unsqueeze(0).to(device)
+
     with torch.no_grad():
         outputs = model(image_tensor)
         probabilities = F.softmax(outputs, dim=1)
         confidence, predicted_idx = torch.max(probabilities, 1)
 
-    predicted_class: str = CLASSES[int(predicted_idx.item())]
-    confidence_score: float = float(confidence.item())
+    predicted_class = CLASSES[predicted_idx.item()]
+    confidence_value = confidence.item()
 
-    return (predicted_class, confidence_score)
-
-
-def get_model_info(variant: str) -> dict[str, Any]:
-    """Get information about a model variant without building it."""
-    info = {
-        "lite": {
-            "name": "WasteNet-Lite",
-            "description": "Ultra-lightweight single-block CNN with GlobalAvgPool for edge deployment",
-            "conv_blocks": 1,
-            "filters": "16→32",
-            "params": "~5K",
-            "inference_time_cpu": "~5ms",
-            "target_accuracy": ">70%",
-            "features": "Minimal, no residuals, no attention, GAP classifier",
-        },
-        "standard": {
-            "name": "WasteNet-Standard",
-            "description": "Classic 3-block CNN with dual FC layers for balanced deployment",
-            "conv_blocks": 3,
-            "filters": "16→32→64",
-            "params": "~4.3M",
-            "inference_time_cpu": "~50ms",
-            "target_accuracy": ">85%",
-            "features": "Progressive filters, dropout regularization, FC classifier",
-        },
-        "smart": {
-            "name": "WasteNet-Smart",
-            "description": "Deep 5-stage WIDE residual CNN with SE attention for maximum accuracy",
-            "conv_blocks": 5,
-            "filters": "64→64→128→256→512 (+ residuals + SE)",
-            "params": "~15M",
-            "inference_time_cpu": "~150ms",
-            "target_accuracy": ">95%",
-            "features": "Deep wide residuals, Squeeze-Excitation attention, BatchNorm throughout, GAP classifier, 10 residual blocks (3+3+2+2)",
-        },
-    }
-    return info.get(variant, info["standard"])
+    return predicted_class, confidence_value
